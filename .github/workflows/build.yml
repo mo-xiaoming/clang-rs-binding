@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# This allows a subsequently queued workflow run to interrupt previous runs
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    name: CI on ${{ matrix.os }}-${{ matrix.toolchain }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        toolchain: [stable, beta, "stable minus 8 releases"]
+        clang: ["15"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install LLVM and Clang ${{ matrix.clang }}
+        run: |
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh ${{ matrix.clang }}
+      - name: Install ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: "clippy, rustfmt"
+      - name: Test (Debug)
+        env:
+          LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
+        run: |
+            cargo test --verbose -- --nocapture
+      - name: Test (Release)
+        env:
+          LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
+        run: |
+            cargo test --release --verbose -- --nocapture
+      - name: rust-clippy
+        run: cargo clippy -- -D warnings
+      - name: Formatting
+        run: cargo fmt --all --verbose -- --check
+      - name: Generating documents
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+        run: cargo doc --no-deps
