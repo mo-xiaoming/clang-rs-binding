@@ -39,11 +39,13 @@ jobs:
           components: "clippy, rustfmt"
       - name: Test (Debug)
         env:
+          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin
           LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
             cargo test --verbose -- --nocapture
       - name: Test (Release)
         env:
+          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin
           LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
             cargo test --release --verbose -- --nocapture

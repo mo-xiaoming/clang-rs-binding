@@ -119,19 +119,21 @@ impl<'tu> Cursor<'tu> {
     }
 }
 
-pub fn visit_children<'tu, F>(cursor: &Cursor<'tu>, f: F)
+type Payload = *mut c_void;
+
+pub fn visit_children<'tu, F>(cursor: &Cursor<'tu>, f: F, payload: Payload)
 where
-    F: Fn(&Cursor<'tu>, &Cursor<'tu>) -> i32,
+    F: Fn(&Cursor<'tu>, &Cursor<'tu>, Payload) -> i32,
 {
     trait NodeCallback<'tu> {
-        fn call(&self, cursor: &Cursor<'tu>, parent: &Cursor<'tu>) -> i32;
+        fn call(&self, cursor: &Cursor<'tu>, parent: &Cursor<'tu>, payload: Payload) -> i32;
     }
     impl<'tu, F> NodeCallback<'tu> for F
     where
-        F: Fn(&Cursor<'tu>, &Cursor<'tu>) -> i32,
+        F: Fn(&Cursor<'tu>, &Cursor<'tu>, Payload) -> i32,
     {
-        fn call(&self, cursor: &Cursor<'tu>, parent: &Cursor<'tu>) -> i32 {
-            self(cursor, parent)
+        fn call(&self, cursor: &Cursor<'tu>, parent: &Cursor<'tu>, payload: Payload) -> i32 {
+            self(cursor, parent, payload)
         }
     }
     extern "C" fn visitor(
@@ -139,17 +141,27 @@ where
         parent: clang_sys::CXCursor,
         data: clang_sys::CXClientData,
     ) -> clang_sys::CXChildVisitResult {
-        let f = unsafe { *(data as *const &dyn NodeCallback<'_>) };
-        f.call(&Cursor::from_raw(cursor), &Cursor::from_raw(parent))
+        let (f, payload) = unsafe { *(data as *mut (&dyn NodeCallback<'_>, Payload)) };
+        f.call(
+            &Cursor::from_raw(cursor),
+            &Cursor::from_raw(parent),
+            payload,
+        )
     }
     let callback = &f as &dyn NodeCallback<'_>;
+    let mut payload = (callback, payload);
     unsafe {
-        clang_sys::clang_visitChildren(cursor.raw, visitor, &callback as *const _ as *mut c_void)
+        clang_sys::clang_visitChildren(
+            cursor.raw,
+            visitor,
+            &mut payload as *mut _ as clang_sys::CXClientData,
+        )
     };
 }
 
-fn a_visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>) -> i32 {
+fn a_visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, level: Payload) -> i32 {
     unsafe {
+        let level = &mut *(level as *mut i32);
         let location = clang_sys::clang_getCursorLocation(cursor.raw);
         if clang_sys::clang_Location_isFromMainFile(location) == 0 {
             return clang_sys::CXChildVisit_Continue;
@@ -157,19 +169,37 @@ fn a_visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>) -> i32 {
         let cursor_kind = clang_sys::clang_getCursorKind(cursor.raw);
         let cursor_kind_name = clang_sys::clang_getCursorKindSpelling(cursor_kind);
         let cursor_spelling = clang_sys::clang_getCursorSpelling(cursor.raw);
+        print!("{:-<width$}", '-', width = *level as usize);
         println!(
-            "-- {:?}\n   {:?}\n   {:?}",
+            " {:?} {} {}",
             location,
             cxstring_into_string(cursor_kind_name),
             cxstring_into_string(cursor_spelling)
         );
-        visit_children(cursor, a_visitor);
+        *level += 1;
+        visit_children(cursor, a_visitor, level as *mut _ as Payload);
         clang_sys::CXChildVisit_Continue
     }
 }
 
+/// should be same as
+/// ```bash
+/// clang -Xclang -ast-dump -fsyntax-only src/foo.cpp
+/// ```
+/// ```text
+/// `-FunctionTemplateDecl 0x55b04d8dd098 <src/foo.cpp:1:1, line:4:1> line:2:6 f
+///  |-TemplateTypeParmDecl 0x55b04d8dce30 <line:1:11, col:20> col:20 referenced typename depth 0 index 0 T
+///  `-FunctionDecl 0x55b04d8dcff8 <line:2:1, line:4:1> line:2:6 f 'bool (T)'
+///    |-ParmVarDecl 0x55b04d8dcf00 <col:8, col:10> col:10 referenced x 'T'
+///    `-CompoundStmt 0x55b04d8dd228 <col:13, line:4:1>
+///      `-ReturnStmt 0x55b04d8dd218 <line:3:3, col:14>
+///        `-BinaryOperator 0x55b04d8dd1f8 <col:10, col:14> '<dependent type>' '%'
+///          |-DeclRefExpr 0x55b04d8dd1b8 <col:10> 'T' lvalue ParmVar 0x55b04d8dcf00 'x' 'T'
+///          `-IntegerLiteral 0x55b04d8dd1d8 <col:14> 'int' 2
+/// ```
 pub fn pay_a_visit(cursor: &Cursor<'_>) {
-    visit_children(cursor, a_visitor)
+    let mut i = 1;
+    visit_children(cursor, a_visitor, &mut i as *mut _ as Payload);
 }
 
 /// convert a `CXString` to `String`
