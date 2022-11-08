@@ -117,9 +117,49 @@ impl<'tu> Cursor<'tu> {
             _tu: PhantomData,
         }
     }
+
+    pub fn kind_spelling(&self) -> String {
+        unsafe {
+            let kind = clang_sys::clang_getCursorKind(self.raw);
+            cxstring_into_string(clang_sys::clang_getCursorKindSpelling(kind))
+        }
+    }
+    pub fn spelling(&self) -> String {
+        unsafe { cxstring_into_string(clang_sys::clang_getCursorSpelling(self.raw)) }
+    }
+    pub fn is_from_main_file(&self) -> bool {
+        unsafe {
+            let location = clang_sys::clang_getCursorLocation(self.raw);
+            clang_sys::clang_Location_isFromMainFile(location) == 0
+        }
+    }
 }
 
-type Payload = *mut c_void;
+pub type Payload = *const c_void;
+pub fn to_payload<T>(v: &T) -> Payload {
+    v as *const _ as Payload
+}
+
+/// convert payload to its original type
+///
+/// # Safety
+///
+/// It is undefined behavior if the wrong type `T` is given
+///
+/// # Example
+///
+/// ```
+/// use clang_transformer::clang::{to_payload, from_payload};
+///
+/// let i = 42_i32;
+/// let payload = to_payload(&i);
+/// let j = unsafe { &*(payload as *const i32) };
+/// assert_eq!(&i as *const _, j as *const _);
+/// assert_eq!(i, *j);
+/// ```
+pub unsafe fn from_payload<'a, T>(payload: Payload) -> &'a T {
+    unsafe { &*(payload as *const T) }
+}
 
 pub fn visit_children<'tu, F>(cursor: &Cursor<'tu>, f: F, payload: Payload)
 where
@@ -159,55 +199,12 @@ where
     };
 }
 
-fn a_visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, level: Payload) -> i32 {
-    unsafe {
-        let level = &mut *(level as *mut i32);
-        let location = clang_sys::clang_getCursorLocation(cursor.raw);
-        if clang_sys::clang_Location_isFromMainFile(location) == 0 {
-            return clang_sys::CXChildVisit_Continue;
-        }
-        let cursor_kind = clang_sys::clang_getCursorKind(cursor.raw);
-        let cursor_kind_name = clang_sys::clang_getCursorKindSpelling(cursor_kind);
-        let cursor_spelling = clang_sys::clang_getCursorSpelling(cursor.raw);
-        print!("{:-<width$}", '-', width = *level as usize);
-        println!(
-            " {:?} {} {}",
-            location,
-            cxstring_into_string(cursor_kind_name),
-            cxstring_into_string(cursor_spelling)
-        );
-        *level += 1;
-        visit_children(cursor, a_visitor, level as *mut _ as Payload);
-        clang_sys::CXChildVisit_Continue
-    }
-}
-
-/// should be same as
-/// ```bash
-/// clang -Xclang -ast-dump -fsyntax-only src/foo.cpp
-/// ```
-/// ```text
-/// `-FunctionTemplateDecl 0x55b04d8dd098 <src/foo.cpp:1:1, line:4:1> line:2:6 f
-///  |-TemplateTypeParmDecl 0x55b04d8dce30 <line:1:11, col:20> col:20 referenced typename depth 0 index 0 T
-///  `-FunctionDecl 0x55b04d8dcff8 <line:2:1, line:4:1> line:2:6 f 'bool (T)'
-///    |-ParmVarDecl 0x55b04d8dcf00 <col:8, col:10> col:10 referenced x 'T'
-///    `-CompoundStmt 0x55b04d8dd228 <col:13, line:4:1>
-///      `-ReturnStmt 0x55b04d8dd218 <line:3:3, col:14>
-///        `-BinaryOperator 0x55b04d8dd1f8 <col:10, col:14> '<dependent type>' '%'
-///          |-DeclRefExpr 0x55b04d8dd1b8 <col:10> 'T' lvalue ParmVar 0x55b04d8dcf00 'x' 'T'
-///          `-IntegerLiteral 0x55b04d8dd1d8 <col:14> 'int' 2
-/// ```
-pub fn pay_a_visit(cursor: &Cursor<'_>) {
-    let mut i = 1;
-    visit_children(cursor, a_visitor, &mut i as *mut _ as Payload);
-}
-
 /// convert a `CXString` to `String`
 ///
-/// # SAFETY
+/// # Safety
 ///
 /// CXString gets disposed inside this function
-unsafe fn cxstring_into_string(cxstring: clang_sys::CXString) -> String {
+pub unsafe fn cxstring_into_string(cxstring: clang_sys::CXString) -> String {
     let s = std::ffi::CStr::from_ptr(clang_sys::clang_getCString(cxstring))
         .to_string_lossy()
         .into_owned();
@@ -217,9 +214,9 @@ unsafe fn cxstring_into_string(cxstring: clang_sys::CXString) -> String {
 
 /// convert a `&str` to `CString`
 ///
-/// # PANICS
+/// # Panics
 ///
 /// it panics if `s` cannot be converted
-fn str_to_cstring(s: &str) -> std::ffi::CString {
+pub fn str_to_cstring(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap()
 }

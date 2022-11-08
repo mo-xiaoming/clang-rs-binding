@@ -32,6 +32,7 @@ jobs:
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.clang }}
+            echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -39,13 +40,13 @@ jobs:
           components: "clippy, rustfmt"
       - name: Test (Debug)
         env:
-          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin
+          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/lib
           LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
             cargo test --verbose -- --nocapture
       - name: Test (Release)
         env:
-          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin
+          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/lib
           LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
             cargo test --release --verbose -- --nocapture
