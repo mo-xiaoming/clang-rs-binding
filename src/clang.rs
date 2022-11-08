@@ -158,7 +158,7 @@ pub fn to_payload<T>(v: &T) -> Payload {
 /// assert_eq!(i, *j);
 /// ```
 pub unsafe fn from_payload<'a, T>(payload: Payload) -> &'a T {
-    unsafe { &*(payload as *const T) }
+    &*(payload as *const T)
 }
 
 pub fn visit_children<'tu, F>(cursor: &Cursor<'tu>, f: F, payload: Payload)
