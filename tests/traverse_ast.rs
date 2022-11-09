@@ -1,5 +1,8 @@
-use clang_transformer::clang::{
-    from_payload, to_payload, visit_children, ChildVisitResult, Clang, Cursor, Index, Payload,
+use std::path::Path;
+
+use clang_transformer::clang::Clang;
+use clang_transformer::index::{
+    from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Index, Payload,
     TranslationUnit,
 };
 
@@ -44,8 +47,8 @@ fn collect_ast(cursor: &Cursor<'_>) -> String {
     data.take().buf
 }
 
-fn generate_ast<P: AsRef<std::path::Path>>(filename: P) -> impl AsRef<std::path::Path> {
-    let ast_filename = std::path::Path::new("traverse_ast.ast");
+fn generate_ast<P: AsRef<Path>>(filename: P) -> impl AsRef<Path> {
+    let ast_filename = Path::new("traverse_ast.ast");
     let status = std::process::Command::new("clang++")
         .arg("-emit-ast")
         .arg(filename.as_ref())
@@ -62,12 +65,12 @@ fn generate_ast<P: AsRef<std::path::Path>>(filename: P) -> impl AsRef<std::path:
     ast_filename
 }
 
-fn read_test_oracle<P: AsRef<std::path::Path>>(filename: P) -> String {
+fn read_test_oracle<P: AsRef<Path>>(filename: P) -> String {
     std::fs::read_to_string(filename).unwrap()
 }
 
 #[test]
-fn it_works() {
+fn traverse_ast_works() {
     let ast_filename = generate_ast("tests/artifacts/traverse_ast/traverse_ast.cpp");
     let oracle = read_test_oracle("tests/artifacts/traverse_ast/traverse_ast.test_oracle");
 

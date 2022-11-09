@@ -6,3 +6,6 @@
 #![warn(missing_copy_implementations)]
 
 pub mod clang;
+pub mod compilation_database;
+pub mod index;
+mod utility;
