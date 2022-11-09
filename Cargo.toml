@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# export LLVM_CONFIG_PATH=/path/to/llvm-config-bin
+# export LIBCLANG_PATH=/path/to/llvm/lib
+# export LLVM_CONFIG_PATH=/path/to/llvm/bin/llvm-config
 clang-sys = {version="1.4.0", features=["runtime", "clang_15_0"]}

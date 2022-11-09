@@ -1,11 +1,12 @@
 use clang_transformer::clang::{
-    from_payload, to_payload, visit_children, Clang, Cursor, Index, Payload, TranslationUnit,
+    from_payload, to_payload, visit_children, ChildVisitResult, Clang, Cursor, Index, Payload,
+    TranslationUnit,
 };
 
 fn visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, payload: Payload) -> i32 {
     let payload = unsafe { from_payload::<AstDataPayload>(payload) };
     if cursor.is_from_main_file() {
-        return clang_sys::CXChildVisit_Continue;
+        return ChildVisitResult::CONTINUE;
     }
     let cursor_kind_spelling = cursor.kind_spelling();
     let cursor_spelling = cursor.spelling();
@@ -24,7 +25,7 @@ fn visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, payload: Payload) -
     });
     visit_children(cursor, visitor, to_payload(&children_payload));
     payload.borrow_mut().buf += &children_payload.borrow().buf;
-    clang_sys::CXChildVisit_Continue
+    ChildVisitResult::CONTINUE
 }
 
 #[derive(Debug, Default)]
@@ -43,26 +44,32 @@ fn collect_ast(cursor: &Cursor<'_>) -> String {
     data.take().buf
 }
 
-fn generate_ast(filename: &str) -> String {
-    let ast_filename = "traverse_ast.ast";
+fn generate_ast<P: AsRef<std::path::Path>>(filename: P) -> impl AsRef<std::path::Path> {
+    let ast_filename = std::path::Path::new("traverse_ast.ast");
     let status = std::process::Command::new("clang++")
         .arg("-emit-ast")
-        .arg(filename)
+        .arg(filename.as_ref())
         .status()
-        .unwrap_or_else(|e| panic!("clang should generate .ast for {}, {}", filename, e));
+        .unwrap_or_else(|e| {
+            panic!(
+                "clang should generate .ast for {}, {}",
+                filename.as_ref().to_string_lossy(),
+                e
+            )
+        });
     assert!(status.success());
-    assert!(std::path::Path::new(ast_filename).exists());
-    ast_filename.to_owned()
+    assert!(ast_filename.exists());
+    ast_filename
 }
 
-fn read_test_oracle(filename: &str) -> String {
+fn read_test_oracle<P: AsRef<std::path::Path>>(filename: P) -> String {
     std::fs::read_to_string(filename).unwrap()
 }
 
 #[test]
 fn it_works() {
-    let ast_filename = generate_ast("tests/artifacts/traverse_ast.cpp");
-    let oracle = read_test_oracle("tests/artifacts/traverse_ast.test_oracle");
+    let ast_filename = generate_ast("tests/artifacts/traverse_ast/traverse_ast.cpp");
+    let oracle = read_test_oracle("tests/artifacts/traverse_ast/traverse_ast.test_oracle");
 
     let clang = Clang::default();
     let index = Index::with_display_diagnostics(&clang);

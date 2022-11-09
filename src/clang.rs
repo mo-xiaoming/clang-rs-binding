@@ -1,12 +1,31 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 
+thread_local! {
+    // no synchronization needed, since `Clang` is not sync or send
+    static CLANG_INIT_FLAG: std::cell::Cell<i32> = std::cell::Cell::new(0);
+}
+/// `Clang` can only be created once per thread, and it is not `Sync` or `Send`.
+///
+/// ```compile_fail
+/// use clang_transformer::clang::Clang;
+///
+/// fn sync_send<T: Sync + Send>(_: &T) {}
+///
+/// let clang = Clang::new();
+/// sync_send(&clang);
+/// ```
 #[derive(Debug)]
 pub struct Clang(PhantomData<*const ()>);
 
 impl Clang {
     pub fn new() -> Self {
         clang_sys::load().unwrap();
+
+        CLANG_INIT_FLAG.with(|f| {
+            f.set(f.get() + 1);
+        });
+
         Self(PhantomData)
     }
 }
@@ -19,7 +38,12 @@ impl Default for Clang {
 
 impl Drop for Clang {
     fn drop(&mut self) {
-        clang_sys::unload().unwrap();
+        CLANG_INIT_FLAG.with(|f| {
+            f.set(f.get() - 1);
+            if f.get() == 0 {
+                clang_sys::unload().unwrap();
+            }
+        });
     }
 }
 
@@ -75,8 +99,8 @@ pub struct TranslationUnit<'index> {
 }
 
 impl<'index> TranslationUnit<'index> {
-    pub fn new(index: &'index Index<'index>, ast_filename: &str) -> Self {
-        let ast_filename = str_to_cstring(ast_filename);
+    pub fn new<P: AsRef<std::path::Path>>(index: &'index Index<'index>, ast_filename: P) -> Self {
+        let ast_filename = path_to_cstring(ast_filename);
         let raw =
             unsafe { clang_sys::clang_createTranslationUnit(index.raw, ast_filename.as_ptr()) };
         assert!(!raw.is_null());
@@ -161,6 +185,15 @@ pub unsafe fn from_payload<'a, T>(payload: Payload) -> &'a T {
     &*(payload as *const T)
 }
 
+#[derive(Debug, Clone, Copy, std::hash::Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChildVisitResult {}
+
+impl ChildVisitResult {
+    pub const BREAK: clang_sys::CXChildVisitResult = clang_sys::CXChildVisit_Break;
+    pub const CONTINUE: clang_sys::CXChildVisitResult = clang_sys::CXChildVisit_Continue;
+    pub const RECURSIVE: clang_sys::CXChildVisitResult = clang_sys::CXChildVisit_Recurse;
+}
+
 pub fn visit_children<'tu, F>(cursor: &Cursor<'tu>, f: F, payload: Payload)
 where
     F: Fn(&Cursor<'tu>, &Cursor<'tu>, Payload) -> i32,
@@ -217,6 +250,30 @@ pub unsafe fn cxstring_into_string(cxstring: clang_sys::CXString) -> String {
 /// # Panics
 ///
 /// it panics if `s` cannot be converted
-pub fn str_to_cstring(s: &str) -> std::ffi::CString {
+fn str_to_cstring(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap()
+}
+
+fn path_to_cstring<P: AsRef<std::path::Path>>(p: P) -> std::ffi::CString {
+    str_to_cstring(p.as_ref().to_str().unwrap())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn init_clang_multiple_times_is_allowed() {
+        let clang_ref = || CLANG_INIT_FLAG.with(|f| f.get());
+
+        let start_ref = clang_ref();
+        assert_eq!(start_ref, 0); // this makes this test has to be the first executed?
+        {
+            let _clang1 = Clang::new();
+            assert_eq!(clang_ref(), start_ref + 1);
+            let _clang2 = Clang::new();
+            assert_eq!(clang_ref(), start_ref + 2);
+        }
+        assert_eq!(clang_ref(), start_ref);
+    }
 }

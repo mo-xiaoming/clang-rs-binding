@@ -3,3 +3,6 @@
 /Cargo.lock
 /*.ast
 /.envrc
+compile_commands.json
+build/
+.cache/
