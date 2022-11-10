@@ -32,29 +32,51 @@ jobs:
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.clang }}
+
             echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
+            echo "LIBCLANG_PATH=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+            echo "LLVM_CONFIG_PATH=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
           components: "clippy, rustfmt"
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
       - name: Test (Debug)
-        env:
-          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/lib
-          LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
-            cargo test --verbose -- --nocapture
+            cargo hack test --each-feature --workspace -- --nocapture
+            cargo hack test --feature-powerset --workspace -- --nocapture
       - name: Test (Release)
-        env:
-          LIBCLANG_PATH: /usr/lib/llvm-${{ matrix.clang }}/lib
-          LLVM_CONFIG_PATH: /usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config
         run: |
-            cargo test --release --verbose -- --nocapture
+            cargo hack test --release --each-feature --workspace -- --nocapture
+            cargo hack test --release --feature-powerset --workspace -- --nocapture
       - name: rust-clippy
-        run: cargo clippy -- -D warnings
+        run: |
+            cargo hack clippy --each-feature --no-dev-deps --workspace -- -D warnings
+            cargo hack clippy --feature-powerset --no-dev-deps --workspace -- -D warnings
       - name: Formatting
         run: cargo fmt --all --verbose -- --check
       - name: Generating documents
         env:
           RUSTDOCFLAGS: --cfg docsrs
         run: cargo doc --no-deps
+      - name: Install cargo-llvm-cov
+        if: matrix.toolchain == 'stable'
+        uses: taiki-e/install-action@cargo-llvm-cov # needs rust 1.60+
+      - name: Code Coverage
+        if: matrix.toolchain == 'stable'
+        run: |
+            cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 70.2 --workspace
+      - name: Code Coverage for Rust ${{ matrix.toolchain }}
+        if: matrix.toolchain == 'stable'
+        run: |
+            cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 70.2 --lcov --output-path lcov.info --workspace
+      - name: Upload coverage to Codecov
+        if: matrix.toolchain == 'stable'
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
+          files: lcov.info
+          fail_ci_if_error: true
+          verbose: true

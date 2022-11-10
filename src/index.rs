@@ -23,6 +23,13 @@ pub struct Index<'clang> {
     _clang: PhantomData<&'clang Clang>,
 }
 
+impl<'clang> Drop for Index<'clang> {
+    fn drop(&mut self) {
+        assert!(!self.raw.is_null());
+        unsafe { clang_sys::clang_disposeIndex(self.raw) };
+    }
+}
+
 impl<'clang> Index<'clang> {
     fn new(exclude: ExcludePCH, display: DisplayDiagnostics) -> Self {
         let raw = unsafe {
@@ -52,17 +59,17 @@ impl<'clang> Index<'clang> {
     }
 }
 
-impl<'clang> Drop for Index<'clang> {
-    fn drop(&mut self) {
-        assert!(!self.raw.is_null());
-        unsafe { clang_sys::clang_disposeIndex(self.raw) };
-    }
-}
-
 #[derive(Debug)]
 pub struct TranslationUnit<'index> {
     raw: clang_sys::CXTranslationUnit,
     _index: PhantomData<&'index Index<'index>>,
+}
+
+impl<'index> Drop for TranslationUnit<'index> {
+    fn drop(&mut self) {
+        assert!(!self.raw.is_null());
+        unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
+    }
 }
 
 impl<'index> TranslationUnit<'index> {
@@ -84,13 +91,6 @@ impl<'index> TranslationUnit<'index> {
             raw,
             _tu: PhantomData,
         }
-    }
-}
-
-impl<'index> Drop for TranslationUnit<'index> {
-    fn drop(&mut self) {
-        assert!(!self.raw.is_null());
-        unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
     }
 }
 
