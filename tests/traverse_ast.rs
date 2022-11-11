@@ -2,8 +2,7 @@ use std::path::Path;
 
 use clang_transformer::clang::Clang;
 use clang_transformer::index::{
-    from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Index, Payload,
-    TranslationUnit,
+    from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Payload,
 };
 
 fn visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, payload: Payload) -> i32 {
@@ -75,8 +74,8 @@ fn traverse_ast_works() {
     let oracle = read_test_oracle("tests/artifacts/traverse_ast/traverse_ast.test_oracle");
 
     let clang = Clang::default();
-    let index = Index::with_display_diagnostics(&clang);
-    let tu = TranslationUnit::new(&index, &ast_filename);
+    let index = clang.create_index_with_display_diagnostics();
+    let tu = index.create_translation_unit(&ast_filename);
     let cursor = tu.create_cursor();
     let buf = collect_ast(&cursor);
 

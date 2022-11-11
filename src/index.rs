@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::path::Path;
 
 use crate::clang::Clang;
+//use crate::compilation_database::CompileCommand;
 use crate::utility::{cxstring_into_string, path_to_cstring};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -25,8 +26,10 @@ pub struct Index<'clang> {
 
 impl<'clang> Drop for Index<'clang> {
     fn drop(&mut self) {
-        assert!(!self.raw.is_null());
-        unsafe { clang_sys::clang_disposeIndex(self.raw) };
+        // for trait checking, `raw` can be null
+        if !self.raw.is_null() {
+            unsafe { clang_sys::clang_disposeIndex(self.raw) };
+        }
     }
 }
 
@@ -44,17 +47,19 @@ impl<'clang> Index<'clang> {
             _clang: PhantomData,
         }
     }
+}
 
-    pub fn with_display_diagnostics(_clang: &Clang) -> Self {
+impl Clang {
+    pub fn create_index_with_display_diagnostics(&self) -> Index<'_> {
         Index::new(ExcludePCH::Off, DisplayDiagnostics::On)
     }
-    pub fn with_exclude_pch(_clang: &Clang) -> Self {
+    pub fn create_index_with_exclude_pch(&self) -> Index<'_> {
         Index::new(ExcludePCH::On, DisplayDiagnostics::Off)
     }
-    pub fn with_exclude_pch_and_display_diagnostics(_clang: &Clang) -> Self {
+    pub fn create_index_with_exclude_pch_and_display_diagnostics(&self) -> Index<'_> {
         Index::new(ExcludePCH::On, DisplayDiagnostics::On)
     }
-    pub fn with(_clang: &Clang) -> Self {
+    pub fn create_index(&self) -> Index<'_> {
         Index::new(ExcludePCH::Off, DisplayDiagnostics::Off)
     }
 }
@@ -67,31 +72,47 @@ pub struct TranslationUnit<'index> {
 
 impl<'index> Drop for TranslationUnit<'index> {
     fn drop(&mut self) {
-        assert!(!self.raw.is_null());
-        unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
+        // for trait checking, `raw` can be null
+        if !self.raw.is_null() {
+            unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
+        }
     }
 }
 
-impl<'index> TranslationUnit<'index> {
-    pub fn new<P: AsRef<Path>>(index: &'index Index<'index>, ast_filename: P) -> Self {
+impl<'index> Index<'index> {
+    pub fn create_translation_unit<P: AsRef<Path>>(&self, ast_filename: P) -> TranslationUnit<'_> {
         let ast_filename = path_to_cstring(ast_filename);
         let raw =
-            unsafe { clang_sys::clang_createTranslationUnit(index.raw, ast_filename.as_ptr()) };
+            unsafe { clang_sys::clang_createTranslationUnit(self.raw, ast_filename.as_ptr()) };
         assert!(!raw.is_null());
         TranslationUnit {
             raw,
             _index: PhantomData,
         }
     }
-    pub fn create_cursor(&self) -> Cursor<'_> {
-        assert!(!self.raw.is_null());
-        let raw = unsafe { clang_sys::clang_getTranslationUnitCursor(self.raw) };
-        assert_eq!(unsafe { clang_sys::clang_Cursor_isNull(raw) }, 0);
-        Cursor {
+    /*
+    pub fn parse_translation_unit_from_compile_command(
+        &self,
+        compile_command: CompileCommand,
+    ) -> TranslationUnit<'_> {
+        let raw = unsafe {
+            clang_sys::clang_parseTranslationUnit(
+                self.raw,
+                std::ptr::null(),
+                arguments,
+                n_arguments,
+                std::ptr::null_mut(),
+                0,
+                clang_sys::CXTranslationUnit_None,
+            )
+        };
+        assert!(!raw.is_null());
+        TranslationUnit {
             raw,
-            _tu: PhantomData,
+            _index: PhantomData,
         }
     }
+    */
 }
 
 #[derive(Debug)]
@@ -126,6 +147,18 @@ impl<'tu> Cursor<'tu> {
     }
 }
 
+impl<'index> TranslationUnit<'index> {
+    pub fn create_cursor(&self) -> Cursor<'_> {
+        assert!(!self.raw.is_null());
+        let raw = unsafe { clang_sys::clang_getTranslationUnitCursor(self.raw) };
+        assert_eq!(unsafe { clang_sys::clang_Cursor_isNull(raw) }, 0);
+        Cursor {
+            raw,
+            _tu: PhantomData,
+        }
+    }
+}
+
 pub type Payload = *const std::ffi::c_void;
 pub fn to_payload<T>(v: &T) -> Payload {
     v as *const _ as Payload
@@ -152,7 +185,7 @@ pub unsafe fn from_payload<'a, T>(payload: Payload) -> &'a T {
     &*(payload as *const T)
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChildVisitResult {}
 
 impl ChildVisitResult {
@@ -197,4 +230,43 @@ where
             &mut payload as *mut _ as clang_sys::CXClientData,
         )
     };
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn traits() {
+        use crate::utility::traits::*;
+
+        let _clang = Clang::new();
+
+        let exclude_pch = ExcludePCH::On;
+        is_small_value_enum(&exclude_pch);
+
+        let display_diag = DisplayDiagnostics::On;
+        is_small_value_enum(&display_diag);
+
+        let index = Index {
+            raw: std::ptr::null_mut() as clang_sys::CXIndex,
+            _clang: PhantomData,
+        };
+        is_ffi_struct(&index);
+
+        let tu = TranslationUnit {
+            raw: std::ptr::null_mut() as clang_sys::CXTranslationUnit,
+            _index: PhantomData,
+        };
+        is_ffi_struct(&tu);
+
+        let cursor = Cursor {
+            raw: clang_sys::CXCursor::default(),
+            _tu: PhantomData,
+        };
+        is_ffi_struct(&cursor);
+
+        let child_visit_result = ChildVisitResult {};
+        is_small_value_struct(&child_visit_result);
+    }
 }

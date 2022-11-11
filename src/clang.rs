@@ -4,6 +4,7 @@ thread_local! {
     // no synchronization needed, since `Clang` is not sync or send
     static CLANG_INIT_FLAG: std::cell::Cell<i32> = std::cell::Cell::new(0);
 }
+
 /// `Clang` can only be created once per thread, and it is not `Sync` or `Send`.
 ///
 /// ```compile_fail
@@ -19,9 +20,10 @@ pub struct Clang(PhantomData<*const ()>);
 
 impl Clang {
     pub fn new() -> Self {
-        clang_sys::load().unwrap();
-
         CLANG_INIT_FLAG.with(|f| {
+            if f.get() == 0 {
+                clang_sys::load().unwrap();
+            }
             f.set(f.get() + 1);
         });
 
@@ -63,5 +65,11 @@ mod test {
             assert_eq!(clang_ref(), start_ref + 2);
         }
         assert_eq!(clang_ref(), start_ref);
+    }
+
+    #[test]
+    fn traits() {
+        use crate::utility::traits::*;
+        is_ffi_struct(&Clang::new());
     }
 }

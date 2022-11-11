@@ -67,11 +67,11 @@ jobs:
       - name: Code Coverage
         if: matrix.toolchain == 'stable'
         run: |
-            cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 70.2 --workspace
+            cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 73 --workspace
       - name: Code Coverage for Rust ${{ matrix.toolchain }}
         if: matrix.toolchain == 'stable'
         run: |
-            cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 70.2 --lcov --output-path lcov.info --workspace
+            cargo llvm-cov --ignore-filename-regex 'bin/*' --lcov --output-path lcov.info --workspace
       - name: Upload coverage to Codecov
         if: matrix.toolchain == 'stable'
         uses: codecov/codecov-action@v3

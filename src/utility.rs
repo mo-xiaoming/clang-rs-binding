@@ -26,3 +26,41 @@ pub(crate) unsafe fn cxstring_into_string(cxstring: clang_sys::CXString) -> Stri
     clang_sys::clang_disposeString(cxstring);
     s
 }
+
+#[allow(dead_code)]
+pub(crate) mod traits {
+    pub(crate) fn is_small_value_struct<T>(_: &T)
+    where
+        T: Sync
+            + Send
+            + Copy
+            + Clone
+            + Default
+            + std::fmt::Debug
+            + std::hash::Hash
+            + PartialEq
+            + Eq
+            + PartialOrd
+            + Ord,
+    {
+    }
+    pub(crate) fn is_small_value_enum<T>(_: &T)
+    where
+        T: Sync
+            + Send
+            + Copy
+            + Clone
+            + std::fmt::Debug
+            + std::hash::Hash
+            + PartialEq
+            + Eq
+            + PartialOrd
+            + Ord,
+    {
+    }
+    pub(crate) fn is_ffi_struct<T>(_: &T)
+    where
+        T: std::fmt::Debug,
+    {
+    }
+}
