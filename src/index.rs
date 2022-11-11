@@ -177,7 +177,7 @@ pub fn to_payload<T>(v: &T) -> Payload {
 ///
 /// let i = 42_i32;
 /// let payload = to_payload(&i);
-/// let j = unsafe { &*(payload as *const i32) };
+/// let j = unsafe { &*from_payload(payload) };
 /// assert_eq!(&i as *const _, j as *const _);
 /// assert_eq!(i, *j);
 /// ```

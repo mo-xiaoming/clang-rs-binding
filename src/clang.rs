@@ -8,11 +8,9 @@ thread_local! {
 /// `Clang` can only be created once per thread, and it is not `Sync` or `Send`.
 ///
 /// ```compile_fail
-/// use clang_transformer::clang::Clang;
-///
 /// fn sync_send<T: Sync + Send>(_: &T) {}
 ///
-/// let clang = Clang::new();
+/// let clang = clang_transformer::clang::Clang::new();
 /// sync_send(&clang);
 /// ```
 #[derive(Debug)]
