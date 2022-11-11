@@ -16,26 +16,48 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  ci:
-    name: CI on ${{ matrix.os }}-${{ matrix.toolchain }}
+  setup:
+    name: Setup on ${{ matrix.os }} with ${{ matrix.clang }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest]
-        toolchain: [stable, beta, "stable minus 8 releases"]
         clang: ["15"]
+    outputs:
+      libclang_path: ${{ steps.llvm-installation.outputs.libclang_path }}
+      llvm_config_path: ${{ steps.llvm-installation.outputs.llvm_config_path }}
+      llvm_bin_path: ${{ steps.llvm-installation.outputs.llvm_bin_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install LLVM and Clang ${{ matrix.clang }}
+      - name: Install LLVM ${{ matrix.clang }}
+        id: llvm-installation
         run: |
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.clang }}
 
-            echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
-            echo "LIBCLANG_PATH=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
-            echo "LLVM_CONFIG_PATH=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
+            # echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
+            # echo "LIBCLANG_PATH=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+            # echo "LLVM_CONFIG_PATH=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
+
+            echo "llvm_bin_path=/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_OUTPUT
+            echo "libclang_path=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_OUTPUT
+            echo "llvm_config_path=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_OUTPUT
+  critical:
+    name: Test on ${{ matrix.os }}-${{ matrix.toolchain }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        toolchain: [stable, beta, "stable minus 8 releases"]
+    steps:
+      - name: Setup environment
+        run: |
+            echo ${{ needs.setup.outputs.llvm_bin_path }} >> $GITHUB_PATH
+            echo "LIBCLANG_PATH=${{ needs.setup.outputs.libclang_path }}" >> $GITHUB_ENV
+            echo "LLVM_CONFIG_PATH=${{ needs.setup.outputs.llvm_config_path }}" >> $GITHUB_ENV
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -55,8 +77,27 @@ jobs:
         run: |
             cargo hack clippy --each-feature --no-dev-deps --workspace -- -D warnings
             cargo hack clippy --feature-powerset --no-dev-deps --workspace -- -D warnings
-      - name: Formatting
+      - name: Install ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: "rustfmt"
+      - name: cargo-fmt
         run: cargo fmt --all --verbose -- --check
+  coverage:
+    name: etc. on ${{ matrix.os }}-${{ matrix.toolchain }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        toolchain: [stable]
+    steps:
+      - name: Setup environment
+        run: |
+            echo ${{ needs.setup.outputs.llvm_bin_path }} >> $GITHUB_PATH
+            echo "LIBCLANG_PATH=${{ needs.setup.outputs.libclang_path }}" >> $GITHUB_ENV
+            echo "LLVM_CONFIG_PATH=${{ needs.setup.outputs.llvm_config_path }}" >> $GITHUB_ENV
       - name: Generating documents
         env:
           RUSTDOCFLAGS: --cfg docsrs
@@ -64,15 +105,15 @@ jobs:
       - name: Install cargo-llvm-cov
         if: matrix.toolchain == 'stable'
         uses: taiki-e/install-action@cargo-llvm-cov # needs rust 1.60+
-      - name: Code Coverage
+      - name: llvm-cov
         if: matrix.toolchain == 'stable'
         run: |
             cargo llvm-cov --ignore-filename-regex 'bin/*' --fail-under-lines 73 --workspace
-      - name: Code Coverage for Rust ${{ matrix.toolchain }}
+      - name: llvm-conv for Rust ${{ matrix.toolchain }}
         if: matrix.toolchain == 'stable'
         run: |
             cargo llvm-cov --ignore-filename-regex 'bin/*' --lcov --output-path lcov.info --workspace
-      - name: Upload coverage to Codecov
+      - name: Upload coverage to Codecov for Rust ${{ matrix.toolchain }}
         if: matrix.toolchain == 'stable'
         uses: codecov/codecov-action@v3
         with:
