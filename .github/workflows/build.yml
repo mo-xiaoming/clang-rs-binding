@@ -16,17 +16,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  setup:
-    name: Setup on ${{ matrix.os }} with ${{ matrix.clang }}
+  ci:
+    name: ${{ matrix.os }}-${{ matrix.clang }}-${{ matrix.toolchain }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest]
+        toolchain: [stable, beta, "stable minus 8 releases"]
         clang: ["15"]
-    outputs:
-      libclang_path: ${{ steps.llvm-installation.outputs.libclang_path }}
-      llvm_config_path: ${{ steps.llvm-installation.outputs.llvm_config_path }}
-      llvm_bin_path: ${{ steps.llvm-installation.outputs.llvm_bin_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -37,27 +34,9 @@ jobs:
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.clang }}
 
-            # echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
-            # echo "LIBCLANG_PATH=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
-            # echo "LLVM_CONFIG_PATH=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
-
-            echo "llvm_bin_path=/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_OUTPUT
-            echo "libclang_path=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_OUTPUT
-            echo "llvm_config_path=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_OUTPUT
-  critical:
-    name: Test on ${{ matrix.os }}-${{ matrix.toolchain }}
-    needs: setup
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        toolchain: [stable, beta, "stable minus 8 releases"]
-    steps:
-      - name: Setup environment
-        run: |
-            echo ${{ needs.setup.outputs.llvm_bin_path }} >> $GITHUB_PATH
-            echo "LIBCLANG_PATH=${{ needs.setup.outputs.libclang_path }}" >> $GITHUB_ENV
-            echo "LLVM_CONFIG_PATH=${{ needs.setup.outputs.llvm_config_path }}" >> $GITHUB_ENV
+            echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> $GITHUB_PATH
+            echo "LIBCLANG_PATH=/usr/lib/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+            echo "LLVM_CONFIG_PATH=/usr/lib/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -84,20 +63,6 @@ jobs:
           components: "rustfmt"
       - name: cargo-fmt
         run: cargo fmt --all --verbose -- --check
-  coverage:
-    name: etc. on ${{ matrix.os }}-${{ matrix.toolchain }}
-    needs: setup
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        toolchain: [stable]
-    steps:
-      - name: Setup environment
-        run: |
-            echo ${{ needs.setup.outputs.llvm_bin_path }} >> $GITHUB_PATH
-            echo "LIBCLANG_PATH=${{ needs.setup.outputs.libclang_path }}" >> $GITHUB_ENV
-            echo "LLVM_CONFIG_PATH=${{ needs.setup.outputs.llvm_config_path }}" >> $GITHUB_ENV
       - name: Generating documents
         env:
           RUSTDOCFLAGS: --cfg docsrs
