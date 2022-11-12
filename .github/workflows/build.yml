@@ -73,8 +73,6 @@ jobs:
       - name: llvm-cov
         if: matrix.toolchain == 'stable'
         run: |
-            cargo llvm-cov --fail-under-lines 73 --workspace
-            cargo llvm-cov --ignore-filename-regex 'src/bin/*' 
             cargo llvm-cov --ignore-filename-regex 'src/bin/*' --fail-under-lines 73 --workspace
       - name: llvm-conv for Rust ${{ matrix.toolchain }}
         if: matrix.toolchain == 'stable'
