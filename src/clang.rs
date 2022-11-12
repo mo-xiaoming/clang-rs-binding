@@ -10,7 +10,7 @@ thread_local! {
 /// ```compile_fail
 /// fn sync_send<T: Sync + Send>(_: &T) {}
 ///
-/// let clang = clang_transformer::clang::Clang::new();
+/// let clang = clang_rs_binding::clang::Clang::new();
 /// sync_send(&clang);
 /// ```
 #[derive(Debug)]

@@ -173,7 +173,7 @@ pub fn to_payload<T>(v: &T) -> Payload {
 /// # Example
 ///
 /// ```
-/// use clang_transformer::index::{to_payload, from_payload};
+/// use clang_rs_binding::index::{to_payload, from_payload};
 ///
 /// let i = 42_i32;
 /// let payload = to_payload(&i);

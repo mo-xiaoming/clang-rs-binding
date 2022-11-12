@@ -1,5 +1,5 @@
 [package]
-name = "clang-transformer"
+name = "clang-rs-binding"
 version = "0.1.0"
 edition = "2021"
 

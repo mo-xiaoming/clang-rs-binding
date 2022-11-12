@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use clang_transformer::clang::Clang;
-use clang_transformer::index::{
+use clang_rs_binding::clang::Clang;
+use clang_rs_binding::index::{
     from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Payload,
 };
 
