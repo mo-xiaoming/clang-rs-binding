@@ -58,10 +58,10 @@ pub(crate) mod traits {
             + Ord,
     {
     }
-    pub(crate) fn is_ffi_struct<T>(v: &T)
+    pub(crate) fn is_ffi_struct<T>(v: &T) -> usize
     where
         T: std::fmt::Debug,
     {
-        let _ = format!("{:?}", v);
+        format!("{:?}", v).len()
     }
 }
