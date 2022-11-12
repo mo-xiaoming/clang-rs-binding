@@ -58,9 +58,10 @@ pub(crate) mod traits {
             + Ord,
     {
     }
-    pub(crate) fn is_ffi_struct<T>(_: &T)
+    pub(crate) fn is_ffi_struct<T>(v: &T)
     where
         T: std::fmt::Debug,
     {
+        let _ = format!("{:?}", v);
     }
 }
