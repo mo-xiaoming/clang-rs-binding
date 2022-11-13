@@ -26,10 +26,7 @@ pub struct Index<'clang> {
 
 impl<'clang> Drop for Index<'clang> {
     fn drop(&mut self) {
-        // for trait checking, `raw` can be null
-        if !self.raw.is_null() {
-            unsafe { clang_sys::clang_disposeIndex(self.raw) };
-        }
+        unsafe { clang_sys::clang_disposeIndex(self.raw) };
     }
 }
 
@@ -72,9 +69,15 @@ pub struct TranslationUnit<'index> {
 
 impl<'index> Drop for TranslationUnit<'index> {
     fn drop(&mut self) {
-        // for trait checking, `raw` can be null
-        if !self.raw.is_null() {
-            unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
+        unsafe { clang_sys::clang_disposeTranslationUnit(self.raw) };
+    }
+}
+
+impl<'index> TranslationUnit<'index> {
+    fn from_raw(raw: clang_sys::CXTranslationUnit) -> Self {
+        Self {
+            raw,
+            _index: PhantomData,
         }
     }
 }
@@ -85,34 +88,38 @@ impl<'index> Index<'index> {
         let raw =
             unsafe { clang_sys::clang_createTranslationUnit(self.raw, ast_filename.as_ptr()) };
         assert!(!raw.is_null());
-        TranslationUnit {
-            raw,
-            _index: PhantomData,
-        }
+        TranslationUnit::from_raw(raw)
     }
-    /*
     pub fn parse_translation_unit_from_compile_command(
         &self,
-        compile_command: CompileCommand,
+        compile_command: crate::compilation_database::CompileCommand,
     ) -> TranslationUnit<'_> {
         let raw = unsafe {
-            clang_sys::clang_parseTranslationUnit(
+            let num_args = compile_command.get_num_args();
+            let mut arguments = Vec::with_capacity(num_args as usize);
+            let mut args = Vec::with_capacity(num_args as usize);
+            for i in 0..num_args {
+                let arg = clang_sys::clang_CompileCommand_getArg(compile_command.raw, i);
+                args.push(arg);
+                let arg = clang_sys::clang_getCString(arg);
+                arguments.push(arg)
+            }
+            let raw = clang_sys::clang_parseTranslationUnit(
                 self.raw,
                 std::ptr::null(),
-                arguments,
-                n_arguments,
+                arguments.as_ptr(),
+                num_args as i32,
                 std::ptr::null_mut(),
                 0,
                 clang_sys::CXTranslationUnit_None,
-            )
+            );
+            assert!(!raw.is_null());
+            args.iter().for_each(|e| clang_sys::clang_disposeString(*e));
+            raw
         };
         assert!(!raw.is_null());
-        TranslationUnit {
-            raw,
-            _index: PhantomData,
-        }
+        TranslationUnit::from_raw(raw)
     }
-    */
 }
 
 #[derive(Debug)]
@@ -143,6 +150,21 @@ impl<'tu> Cursor<'tu> {
         unsafe {
             let location = clang_sys::clang_getCursorLocation(self.raw);
             clang_sys::clang_Location_isFromMainFile(location) == 0
+        }
+    }
+    pub fn is_function_decl(&self) -> bool {
+        unsafe { clang_sys::CXCursor_FunctionDecl == clang_sys::clang_getCursorKind(self.raw) }
+    }
+    pub fn is_cxx_method(&self) -> bool {
+        unsafe { clang_sys::CXCursor_CXXMethod == clang_sys::clang_getCursorKind(self.raw) }
+    }
+    pub fn is_function_template(&self) -> bool {
+        unsafe { clang_sys::CXCursor_FunctionTemplate == clang_sys::clang_getCursorKind(self.raw) }
+    }
+    pub fn extent(&self) -> SourceRange {
+        SourceRange {
+            raw: unsafe { clang_sys::clang_getCursorExtent(self.raw) },
+            _cursor: PhantomData,
         }
     }
 }
@@ -232,6 +254,87 @@ where
     };
 }
 
+#[derive(Debug)]
+pub struct SourceRange<'cursor> {
+    raw: clang_sys::CXSourceRange,
+    _cursor: PhantomData<&'cursor Cursor<'cursor>>,
+}
+
+impl<'cursor> SourceRange<'cursor> {
+    pub fn start(&self) -> SourceLocation<'_> {
+        unsafe { SourceLocation::from_raw(clang_sys::clang_getRangeStart(self.raw)) }
+    }
+    pub fn end(&self) -> SourceLocation<'_> {
+        unsafe { SourceLocation::from_raw(clang_sys::clang_getRangeEnd(self.raw)) }
+    }
+}
+
+#[derive(Debug)]
+pub struct File {
+    raw: clang_sys::CXFile,
+}
+
+impl File {
+    pub(crate) fn from_raw(raw: clang_sys::CXFile) -> Self {
+        Self { raw }
+    }
+}
+
+#[derive(Debug)]
+pub struct SourceLocation<'source_range> {
+    raw: clang_sys::CXSourceLocation,
+    _source_range: PhantomData<&'source_range SourceRange<'source_range>>,
+}
+
+pub struct SpellingLocation {
+    file: File,
+    line: u32,
+    column: u32,
+    offset: u32,
+}
+
+impl std::fmt::Debug for SpellingLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let filename = unsafe { cxstring_into_string(clang_sys::clang_getFileName(self.file.raw)) };
+        f.debug_struct("SpellingLocation")
+            .field("file", &filename)
+            .field("line", &self.line)
+            .field("column", &self.column)
+            .field("offset", &self.offset)
+            .finish()
+    }
+}
+
+impl<'source_range> SourceLocation<'source_range> {
+    pub(crate) fn from_raw(raw: clang_sys::CXSourceLocation) -> Self {
+        Self {
+            raw,
+            _source_range: PhantomData,
+        }
+    }
+    pub fn spelling_location(&self) -> SpellingLocation {
+        let mut file = std::ptr::null_mut();
+        let mut line = 0;
+        let mut column = 0;
+        let mut offset = 0;
+        unsafe {
+            clang_sys::clang_getSpellingLocation(
+                self.raw,
+                &mut file,
+                &mut line,
+                &mut column,
+                &mut offset,
+            );
+        }
+        SpellingLocation {
+            file: File::from_raw(file),
+            line,
+            column,
+            offset,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -268,5 +371,32 @@ mod test {
 
         let child_visit_result = ChildVisitResult {};
         is_small_value_struct(&child_visit_result);
+
+        let source_range = SourceRange {
+            raw: clang_sys::CXSourceRange::default(),
+            _cursor: PhantomData,
+        };
+        is_ffi_struct(&source_range);
+
+        let source_location = SourceLocation {
+            raw: clang_sys::CXSourceLocation::default(),
+            _source_range: PhantomData,
+        };
+        is_ffi_struct(&source_location);
+
+        let file = File {
+            raw: std::ptr::null_mut() as clang_sys::CXFile,
+        };
+        is_ffi_struct(&file);
+
+        let spelling_location = SpellingLocation {
+            file: File {
+                raw: std::ptr::null_mut() as clang_sys::CXFile,
+            },
+            line: 0,
+            column: 0,
+            offset: 0,
+        };
+        is_ffi_struct(&spelling_location);
     }
 }

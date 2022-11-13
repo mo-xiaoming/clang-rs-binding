@@ -12,11 +12,8 @@ pub struct CompilationDatabase<'clang> {
 
 impl<'clang> Drop for CompilationDatabase<'clang> {
     fn drop(&mut self) {
-        // for traits checking, `raw` can be null
-        if !self.raw.is_null() {
-            unsafe {
-                clang_sys::clang_CompilationDatabase_dispose(self.raw);
-            }
+        unsafe {
+            clang_sys::clang_CompilationDatabase_dispose(self.raw);
         }
     }
 }
@@ -38,7 +35,6 @@ impl Clang {
                 &mut error,
             )
         };
-        assert!(!raw.is_null());
         match error {
             clang_sys::CXCompilationDatabase_NoError => Ok(CompilationDatabase {
                 raw,
@@ -60,11 +56,8 @@ pub struct CompileCommands<'compile_db> {
 
 impl<'compile_db> Drop for CompileCommands<'compile_db> {
     fn drop(&mut self) {
-        // for traits checking, `raw` can be null
-        if !self.raw.is_null() {
-            unsafe {
-                clang_sys::clang_CompileCommands_dispose(self.raw);
-            }
+        unsafe {
+            clang_sys::clang_CompileCommands_dispose(self.raw);
         }
     }
 }
@@ -96,7 +89,7 @@ impl<'compile_commands> CompileCommands<'compile_commands> {
 
 #[derive(Debug)]
 pub struct CompileCommand<'compile_commands> {
-    raw: clang_sys::CXCompileCommand,
+    pub(crate) raw: clang_sys::CXCompileCommand,
     _compile_commands: PhantomData<&'compile_commands CompileCommands<'compile_commands>>,
 }
 
@@ -127,6 +120,8 @@ mod test {
     #[test]
     fn traits() {
         use crate::utility::traits::*;
+
+        let _clang = Clang::new();
 
         let error = CompilationDatabaseError::CanNotLoadDatabase;
         is_small_value_enum(&error);

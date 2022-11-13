@@ -5,7 +5,7 @@ use clang_rs_binding::index::{
     from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Payload,
 };
 
-fn visitor<'tu>(cursor: &Cursor<'tu>, _parent: &Cursor<'tu>, payload: Payload) -> i32 {
+fn visitor(cursor: &Cursor, _parent: &Cursor, payload: Payload) -> i32 {
     let payload = unsafe { from_payload::<AstDataPayload>(payload) };
     if cursor.is_from_main_file() {
         return ChildVisitResult::CONTINUE;
@@ -48,7 +48,7 @@ fn collect_ast(cursor: &Cursor<'_>) -> String {
 
 fn generate_ast<P: AsRef<Path>>(filename: P) -> impl AsRef<Path> {
     let ast_filename = Path::new("traverse_ast.ast");
-    let status = std::process::Command::new("clang++")
+    std::process::Command::new("clang++")
         .arg("-emit-ast")
         .arg(filename.as_ref())
         .status()
@@ -59,7 +59,6 @@ fn generate_ast<P: AsRef<Path>>(filename: P) -> impl AsRef<Path> {
                 e
             )
         });
-    assert!(status.success());
     assert!(ast_filename.exists());
     ast_filename
 }

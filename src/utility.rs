@@ -58,10 +58,15 @@ pub(crate) mod traits {
             + Ord,
     {
     }
-    pub(crate) fn is_ffi_struct<T>(v: &T) -> usize
+    pub(crate) fn is_ffi_struct<T>(_: &T)
     where
         T: std::fmt::Debug,
     {
-        format!("{:?}", v).len()
+        // without calling fmt, `#[derive(Debug)]` may not be considered covered
+        // but since we do not normally object properly for traits checking
+        // some fields can be invalid (null), which causes crash when calling `fmt`
+        // but adding conditional checks for `raw.is_null()` seems to be a safety
+        // loop hold to me
+        // so I'd rather choose lower coverage number.
     }
 }
