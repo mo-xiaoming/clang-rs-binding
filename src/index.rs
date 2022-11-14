@@ -286,10 +286,10 @@ pub struct SourceLocation<'source_range> {
 }
 
 pub struct SpellingLocation {
-    file: File,
-    line: u32,
-    column: u32,
-    offset: u32,
+    pub file: File,
+    pub line: u32,
+    pub column: u32,
+    pub offset: u32,
 }
 
 impl std::fmt::Debug for SpellingLocation {

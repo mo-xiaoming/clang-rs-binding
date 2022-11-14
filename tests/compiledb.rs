@@ -1,5 +1,7 @@
 use clang_rs_binding::clang::Clang;
-use clang_rs_binding::index::{from_payload, to_payload, ChildVisitResult, Cursor, Payload};
+use clang_rs_binding::index::{
+    from_payload, to_payload, ChildVisitResult, Cursor, Payload, SpellingLocation,
+};
 use clang_rs_binding::with_chdir;
 use std::path::Path;
 
@@ -16,10 +18,18 @@ fn visitor(cursor: &Cursor, _parent: &Cursor, payload: Payload) -> i32 {
         let start_spelling_loc = start_loc.spelling_location();
         let end_spelling_loc = end_loc.spelling_location();
         let payload = unsafe { from_payload::<AstDataPayload>(payload) };
+        let sl_to_string = |sl: SpellingLocation| {
+            format!(
+                "line: {}, column: {}, offset: {}",
+                sl.line, sl.column, sl.offset
+            )
+        };
         let new_buf = payload.borrow().clone()
             + &format!(
-                "{}: {:?} - {:?}\n",
-                spelling, start_spelling_loc, end_spelling_loc
+                "{}: {} - {}\n",
+                spelling,
+                sl_to_string(start_spelling_loc),
+                sl_to_string(end_spelling_loc)
             );
         *payload.borrow_mut() = new_buf;
     }
