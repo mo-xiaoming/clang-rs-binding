@@ -1,8 +1,8 @@
 name: CI
 
 on:
-  schedule:
-    - cron: '0 21 * * FRI'
+  #schedule:
+  #  - cron: '0 21 * * FRI'
   workflow_dispatch:
   push:
     branches: [ "main" ]
@@ -75,7 +75,7 @@ jobs:
       - name: llvm-cov
         if: matrix.toolchain == 'stable'
         run: |
-            cargo llvm-cov --fail-under-lines 89 --workspace
+            cargo llvm-cov --fail-under-lines 90 --workspace
       - name: llvm-conv for Rust ${{ matrix.toolchain }}
         if: matrix.toolchain == 'stable'
         run: |

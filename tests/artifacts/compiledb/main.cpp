@@ -1,3 +1,4 @@
+#include <iostream>
 
 int fib(int n) {
   if (n == 0 || n == 1) {
@@ -8,5 +9,5 @@ int fib(int n) {
 
 int main() {
   int r = fib(3);
-  return r;
+  std::cout << r << '\n';
 }

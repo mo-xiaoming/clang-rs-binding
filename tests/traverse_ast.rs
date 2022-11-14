@@ -1,17 +1,15 @@
 use std::path::Path;
 
 use clang_rs_binding::clang::Clang;
-use clang_rs_binding::index::{
-    from_payload, to_payload, visit_children, ChildVisitResult, Cursor, Payload,
-};
+use clang_rs_binding::index::{from_payload, to_payload, ChildVisitResult, Cursor, Payload};
 
 fn visitor(cursor: &Cursor, _parent: &Cursor, payload: Payload) -> i32 {
-    let payload = unsafe { from_payload::<AstDataPayload>(payload) };
     if cursor.is_from_main_file() {
         return ChildVisitResult::CONTINUE;
     }
     let cursor_kind_spelling = cursor.kind_spelling();
     let cursor_spelling = cursor.spelling();
+    let payload = unsafe { from_payload::<AstDataPayload>(payload) };
     let new_buf = payload.borrow().buf.clone()
         + &format!(
             "{:-<width$} {} ({})\n",
@@ -25,7 +23,7 @@ fn visitor(cursor: &Cursor, _parent: &Cursor, payload: Payload) -> i32 {
         level: payload.borrow().level + 1,
         buf: String::new(),
     });
-    visit_children(cursor, visitor, to_payload(&children_payload));
+    cursor.visit_children(visitor, to_payload(&children_payload));
     payload.borrow_mut().buf += &children_payload.borrow().buf;
     ChildVisitResult::CONTINUE
 }
@@ -42,7 +40,7 @@ fn collect_ast(cursor: &Cursor<'_>) -> String {
         level: 0,
         buf: String::new(),
     });
-    visit_children(cursor, visitor, to_payload(&data));
+    cursor.visit_children(visitor, to_payload(&data));
     data.take().buf
 }
 
@@ -69,8 +67,9 @@ fn read_test_oracle<P: AsRef<Path>>(filename: P) -> String {
 
 #[test]
 fn traverse_ast_works() {
-    let ast_filename = generate_ast("tests/artifacts/traverse_ast/traverse_ast.cpp");
-    let oracle = read_test_oracle("tests/artifacts/traverse_ast/traverse_ast.test_oracle");
+    let traverse_ast_dir = std::path::Path::new("tests/artifacts/traverse_ast");
+    let ast_filename = generate_ast(traverse_ast_dir.join("traverse_ast.cpp"));
+    let oracle = read_test_oracle(traverse_ast_dir.join("traverse_ast.test_oracle"));
 
     let clang = Clang::default();
     let index = clang.create_index_with_display_diagnostics();

@@ -1,0 +1,2 @@
+fib: SpellingLocation { file: "/home/mx/repos/clang-transform-rs/tests/artifacts/compiledb/main.cpp", line: 3, column: 1, offset: 21 } - SpellingLocation { file: "/home/mx/repos/clang-transform-rs/tests/artifacts/compiledb/main.cpp", line: 8, column: 2, offset: 117 }
+main: SpellingLocation { file: "/home/mx/repos/clang-transform-rs/tests/artifacts/compiledb/main.cpp", line: 10, column: 1, offset: 119 } - SpellingLocation { file: "/home/mx/repos/clang-transform-rs/tests/artifacts/compiledb/main.cpp", line: 13, column: 2, offset: 177 }
