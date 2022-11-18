@@ -56,15 +56,15 @@ jobs:
             cargo hack test --release --feature-powerset --workspace -- --nocapture
       - name: rust-clippy
         run: |
-            cargo hack clippy --each-feature --no-dev-deps --workspace -- -D warnings
-            cargo hack clippy --feature-powerset --no-dev-deps --workspace -- -D warnings
+            cargo hack clippy --each-feature --all-targets --no-deps --workspace -- -D warnings
+            cargo hack clippy --feature-powerset --all-targets --no-deps --workspace -- -D warnings
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
           components: "rustfmt"
       - name: cargo-fmt
-        run: cargo fmt --all --verbose -- --check
+        run: cargo fmt --all -- --check
       - name: Generating documents
         env:
           RUSTDOCFLAGS: --cfg docsrs
@@ -87,4 +87,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
           fail_ci_if_error: true
-          verbose: true
